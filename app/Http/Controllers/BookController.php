@@ -10,14 +10,24 @@ class BookController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        // Mengambil data buku terbaru, 10 data per halaman
-        $books = Book::latest()->paginate(10);
+        // Mengambil data buku berdasarkan kata kunci pencarian
+        $books = Book::when($request->search, function ($query, $search) {
+            // Mencari berdasarkan judul atau nama pengarang
+            $query->where(function ($q) use ($search) {
+                $q->where('judul', 'like', "%{$search}%")
+                    ->orWhere('pengarang', 'like', "%{$search}%");
+            });
+        })
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
 
-        // Mengirim data buku ke halaman Vue Books/Index
+        // Mengirim data buku dan kata kunci pencarian ke halaman Vue
         return inertia('Books/Index', [
             'books' => $books,
+            'search' => $request->search,
         ]);
     }
 
@@ -37,19 +47,21 @@ class BookController extends Controller
     {
         // 1. Validasi data yang dikirim dari form
         $validated = $request->validate([
-            'kode_buku' => 'required|unique:books',
-            'judul' => 'required|max:255',
-            'pengarang' => 'required|max:255',
-            'penerbit' => 'nullable|max:255',
-            'tahun' => 'nullable|digits:4',
+            'kode_buku' => 'required|string|max:255|unique:books,kode_buku',
+            'judul' => 'required|string|max:255',
+            'pengarang' => 'required|string|max:255',
+            'penerbit' => 'nullable|string|max:255',
+            'tahun' => 'required|digits:4',
             'stok' => 'required|integer|min:0',
         ]);
 
-        // 2. Jika seluruh data valid, simpan sebagai baris baru di tabel books
+        // 2. Simpan sebagai baris baru di tabel books (nama kolom sudah sesuai dengan validasi)
         Book::create($validated);
 
-        // 3. Arahkan kembali ke halaman daftar buku, sertakan pesan sukses
-        return redirect()->route('books.index')->with('success', 'Buku berhasil ditambahkan');
+        // 3. Kembali ke daftar buku dengan pesan sukses
+        return redirect()
+            ->route('books.index')
+            ->with('success', 'Buku berhasil ditambahkan');
     }
 
     /**
@@ -65,7 +77,11 @@ class BookController extends Controller
      */
     public function edit(Book $book)
     {
-        //
+        // Mengambil data buku yang akan diedit melalui Route Model Binding
+        // Mengirim data buku ke halaman Vue Books/Edit agar formulir menampilkan nilai lama
+        return inertia('Books/Edit', [
+            'book' => $book,
+        ]);
     }
 
     /**
@@ -73,7 +89,22 @@ class BookController extends Controller
      */
     public function update(Request $request, Book $book)
     {
-        //
+        // Aturan sama dengan store(), dengan satu perbedaan: kode_buku milik buku ini sendiri dikecualikan dari unique
+        $validated = $request->validate([
+            'kode_buku' => 'required|string|max:255|unique:books,kode_buku,' . $book->id,
+            'judul' => 'required|string|max:255',
+            'pengarang' => 'required|string|max:255',
+            'penerbit' => 'nullable|string|max:255',
+            'tahun' => 'required|digits:4',
+            'stok' => 'required|integer|min:0',
+        ]);
+
+        // Mengganti data lama pada $book dengan data baru yang sudah divalidasi
+        $book->update($validated);
+
+        return redirect()
+            ->route('books.index')
+            ->with('success', 'Buku berhasil diperbarui');
     }
 
     /**
@@ -81,6 +112,12 @@ class BookController extends Controller
      */
     public function destroy(Book $book)
     {
-        //
+        // Menghapus data buku dari tabel books
+        $book->delete();
+
+        // Kembali ke halaman daftar buku dengan pesan bahwa buku berhasil dihapus
+        return redirect()
+            ->route('books.index')
+            ->with('success', 'Buku berhasil dihapus');
     }
 }

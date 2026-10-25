@@ -34,9 +34,11 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
-            // Pesan flash (mis. 'success') dari ->with() di controller
+            // Membagikan pesan flash ke SELURUH halaman Vue (dibaca lewat $page.props.flash)
             'flash' => [
-                'success' => fn () => $request->session()->get('success'),
+                // session('success') membaca pesan dari ->with('success', ...) di controller
+                // bernilai null apabila tidak ada pesan
+                'success' => session('success'),
             ],
         ];
     }

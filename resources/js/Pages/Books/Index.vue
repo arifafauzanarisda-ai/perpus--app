@@ -1,94 +1,106 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+// 'ref' baru ditambahkan: dipakai untuk menyimpan ketikan pengguna pada kotak pencarian
 
-// Menerima data buku dari BookController@index
-defineProps({
+const props = defineProps({
     books: Object,
+    search: String, // menerima kata kunci terakhir yang dikirim dari Langkah 7
 });
 
-// Pesan sukses dari redirect di BookController@store (dibagikan lewat HandleInertiaRequests)
-const page = usePage();
+// Nilai awal kotak pencarian diisi dari props.search, bukan selalu kosong
+const keyword = ref(props.search);
+
+// Function baru: dijalankan saat pengguna menekan Enter pada kotak pencarian
+function cari() {
+    // router.get mengarahkan ke /books dengan tambahan ?search=..., memicu index() di Langkah 7
+    router.get('/books', { search: keyword.value });
+}
+
+function hapus(id) {
+    if (confirm('Yakin ingin menghapus buku ini?')) {
+        router.delete(route('books.destroy', id));
+    }
+}
 </script>
 
 <template>
     <AuthenticatedLayout>
-        <div class="p-6">
-            <h1 class="mb-4 text-2xl font-bold">Data Buku</h1>
+        <h1>Data Buku</h1>
 
-            <!-- Pesan sukses setelah data berhasil disimpan -->
-            <div
-                v-if="page.props.flash?.success"
-                class="mb-4 rounded border border-green-300 bg-green-100 px-4 py-2 text-green-800"
-            >
-                {{ page.props.flash.success }}
-            </div>
+        <!-- Flash message baru: $page.props.flash tersedia karena Langkah 5 -->
+        <div v-if="$page.props.flash.success">
+            {{ $page.props.flash.success }}
+        </div>
 
-            <!-- Tombol menuju halaman tambah buku -->
+        <Link href="/books/create">+ Tambah Buku</Link>
+
+        <!-- Enter memanggil cari() -->
+        <input
+            v-model="keyword"
+            @keyup.enter="cari"
+            type="text"
+            placeholder="Cari judul atau pengarang..."
+        >
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Kode</th>
+                    <th>Judul</th>
+                    <th>Pengarang</th>
+                    <th>Stok</th>
+                    <th>Aksi</th>
+                    <!-- kolom baru untuk tombol Edit dan Hapus -->
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="book in books.data" :key="book.id">
+                    <td>{{ book.kode_buku }}</td>
+                    <td>{{ book.judul }}</td>
+                    <td>{{ book.pengarang }}</td>
+                    <td>{{ book.stok }}</td>
+                    <td>
+                        <!-- Link menuju form edit, mengarah ke Books/Edit.vue (Langkah 3) -->
+                        <Link :href="`/books/${book.id}/edit`">Edit</Link>
+                        <!-- @click memanggil function hapus() yang baru ditambahkan di atas -->
+                        <button @click="hapus(book.id)">Hapus</button>
+                    </td>
+                </tr>
+
+                <!-- Pesan jika tidak ada data (atau hasil pencarian kosong) -->
+                <tr v-if="books.data.length === 0">
+                    <td colspan="5" class="text-center text-gray-500">
+                        Tidak ada data buku.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Navigasi paginasi: 10 data per halaman, kata kunci pencarian ikut terbawa -->
+        <div class="mt-4 flex items-center justify-between">
             <Link
-                href="/books/create"
-                class="mb-4 inline-block rounded bg-gray-800 px-4 py-2 text-white hover:bg-gray-700"
+                v-if="books.prev_page_url"
+                :href="books.prev_page_url"
+                class="rounded border px-3 py-1 hover:bg-gray-100"
             >
-                + Tambah Buku
+                &larr; Sebelumnya
             </Link>
+            <span v-else class="px-3 py-1 text-gray-400">&larr; Sebelumnya</span>
 
-            <!-- Tabel data buku -->
-            <table class="mt-4 w-full border-collapse bg-white text-left">
-                <thead>
-                    <tr class="border-b bg-gray-50">
-                        <th class="px-3 py-2">Kode</th>
-                        <th class="px-3 py-2">Judul</th>
-                        <th class="px-3 py-2">Pengarang</th>
-                        <th class="px-3 py-2">Stok</th>
-                    </tr>
-                </thead>
+            <span class="text-sm text-gray-600">
+                Halaman {{ books.current_page }} dari {{ books.last_page }}
+            </span>
 
-                <tbody>
-                    <!-- Menampilkan setiap data buku -->
-                    <tr
-                        v-for="book in books.data"
-                        :key="book.id"
-                        class="border-b"
-                    >
-                        <td class="px-3 py-2">{{ book.kode_buku }}</td>
-                        <td class="px-3 py-2">{{ book.judul }}</td>
-                        <td class="px-3 py-2">{{ book.pengarang }}</td>
-                        <td class="px-3 py-2">{{ book.stok }}</td>
-                    </tr>
-
-                    <!-- Pesan jika belum ada data buku -->
-                    <tr v-if="books.data.length === 0">
-                        <td colspan="4" class="px-3 py-4 text-center text-gray-500">
-                            Belum ada data buku.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <!-- Navigasi paginasi: 10 data per halaman -->
-            <div class="mt-4 flex items-center justify-between text-sm">
-                <Link
-                    v-if="books.prev_page_url"
-                    :href="books.prev_page_url"
-                    class="rounded border px-3 py-1 hover:bg-gray-100"
-                >
-                    &larr; Sebelumnya
-                </Link>
-                <span v-else class="px-3 py-1 text-gray-400">&larr; Sebelumnya</span>
-
-                <span class="text-gray-600">
-                    Halaman {{ books.current_page }} dari {{ books.last_page }}
-                </span>
-
-                <Link
-                    v-if="books.next_page_url"
-                    :href="books.next_page_url"
-                    class="rounded border px-3 py-1 hover:bg-gray-100"
-                >
-                    Berikutnya &rarr;
-                </Link>
-                <span v-else class="px-3 py-1 text-gray-400">Berikutnya &rarr;</span>
-            </div>
+            <Link
+                v-if="books.next_page_url"
+                :href="books.next_page_url"
+                class="rounded border px-3 py-1 hover:bg-gray-100"
+            >
+                Berikutnya &rarr;
+            </Link>
+            <span v-else class="px-3 py-1 text-gray-400">Berikutnya &rarr;</span>
         </div>
     </AuthenticatedLayout>
 </template>
